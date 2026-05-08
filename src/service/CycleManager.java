@@ -1,25 +1,44 @@
 package service;
 
-import model.Transaction;
-import model.User;
-import interfaces.IDataStorage;
-import java.util.List;
-import java.util.Map;
+import model.*;
+import interfaces.*;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class CycleManager {
     private User user;
     private IDataStorage storage;
+    private IAlertService alertService;
 
-    public CycleManager(User user, IDataStorage storage) {
+    public CycleManager(User user, IDataStorage storage, IAlertService alertService) {
         this.user = user;
         this.storage = storage;
+        this.alertService = alertService;
     }
 
     public void addTransaction(String desc, double amount, Transaction.TransactionType type, String category) {
+        double currentDailyLimit = calculateSafeDailyLimit();
+
         Transaction t = new Transaction(desc, amount, type, category);
         storage.saveTransaction(t);
         user.adjustBalance((float)amount, type);
+
+        if (type == Transaction.TransactionType.EXPENSE && amount > currentDailyLimit) {
+            alertService.sendCycleLimitAlert();
+        }
+
+        if (user.getCurrentBalance() < 100) {
+            alertService.sendLowBalanceAlert(user.getCurrentBalance());
+        }
+    }
+
+    public double calculateSafeDailyLimit() {
+        long diffInMillies = Math.abs(user.getCycleEndDate().getTime() - System.currentTimeMillis());
+        long diffInDays = (diffInMillies / (1000 * 60 * 60 * 24)) + 1;
+
+        if (diffInDays <= 0) return user.getCurrentBalance();
+
+        return user.getCurrentBalance() / diffInDays;
     }
 
     public Map<String, Double> getExpensesByCategory() {

@@ -2,6 +2,7 @@ import model.Transaction;
 import model.User;
 import service.CycleManager;
 import interfaces.IDataStorage;
+import interfaces.IAlertService;
 import java.util.*;
 
 public class Main {
@@ -10,20 +11,36 @@ public class Main {
     private static User myUser;
 
     public static void main(String[] args) {
-        initializeSystem();
-        runAppLoop();
+        setupSystem();
+        runApp();
     }
 
-    private static void initializeSystem() {
-        System.out.println("=== Masrofy System Initializing ===");
+    private static void setupSystem() {
+        System.out.println("=== Masrofy System ===");
         System.out.print("Enter Your Name: ");
         String name = scanner.nextLine();
+        System.out.print("Initial Budget: ");
+        float initialBudget = scanner.nextFloat();
+        scanner.nextLine();
 
+        myUser = new User(name, initialBudget);
 
-        myUser = new User(name, 0);
+        IAlertService alertService = new IAlertService() {
+            @Override
+            public void sendLowBalanceAlert(float balance) {
+                System.out.println("\n[ALERT] Low Balance: " + balance + " EGP");
+            }
+            @Override
+            public void sendCycleLimitAlert() {
+                System.out.println("\n[ALERT] Warning: Daily Limit Exceeded!");
+            }
+            @Override
+            public void notifyUser(String message) {
+                System.out.println("\n[INFO] " + message);
+            }
+        };
 
-
-        IDataStorage mockStorage = new IDataStorage() {
+        IDataStorage storage = new IDataStorage() {
             private List<Transaction> list = new ArrayList<>();
             @Override
             public void saveTransaction(Transaction t) { list.add(t); }
@@ -31,84 +48,60 @@ public class Main {
             public List<Transaction> loadTransactions() { return list; }
         };
 
-        manager = new CycleManager(myUser, mockStorage);
+        manager = new CycleManager(myUser, storage, alertService);
     }
 
-    private static void runAppLoop() {
-        boolean exit = false;
-        while (!exit) {
-            printMenu();
+    private static void runApp() {
+        while (true) {
+            System.out.println("\n1. Income | 2. Expense | 3. Status | 4. History | 5. Exit");
+            System.out.print("Selection: ");
             int choice = getIntInput();
 
             switch (choice) {
-                case 1 -> handleTransaction(Transaction.TransactionType.INCOME);
-                case 2 -> handleTransaction(Transaction.TransactionType.EXPENSE);
-                case 3 -> showFinancialSummary();
-                case 4 -> showCategoryReport();
-                case 5 -> showFullHistory();
-                case 6 -> {
-                    exit = true;
-                    System.out.println("System Closing... Done.");
-                }
-                default -> System.out.println("Invalid option! Try again.");
+                case 1 -> addEntry(Transaction.TransactionType.INCOME);
+                case 2 -> addEntry(Transaction.TransactionType.EXPENSE);
+                case 3 -> showStatus();
+                case 4 -> showHistory();
+                case 5 -> System.exit(0);
+                default -> System.out.println("Invalid Option!");
             }
         }
     }
 
-    private static void printMenu() {
-        System.out.println("\n--- MENU ---");
-        System.out.println("1. Add Income");
-        System.out.println("2. Add Expense");
-        System.out.println("3. Balance Summary");
-        System.out.println("4. Category Report");
-        System.out.println("5. History");
-        System.out.println("6. Exit");
-        System.out.print("Select: ");
-    }
-
-    private static void handleTransaction(Transaction.TransactionType type) {
+    private static void addEntry(Transaction.TransactionType type) {
         System.out.print("Description: ");
         String desc = scanner.nextLine();
         System.out.print("Amount: ");
-        double amount = scanner.nextDouble();
+        double amt = scanner.nextDouble();
         scanner.nextLine();
         System.out.print("Category: ");
-        String category = scanner.nextLine();
+        String cat = scanner.nextLine();
 
-        manager.addTransaction(desc, amount, type, category);
-        System.out.println("Successfully Added!");
+        manager.addTransaction(desc, amt, type, cat);
+        System.out.println("Transaction Saved.");
     }
 
-    private static void showFinancialSummary() {
-        System.out.println("\n--- FINANCIAL SUMMARY ---");
+    private static void showStatus() {
+        System.out.println("\n--- Financial Status ---");
         System.out.println("User: " + myUser.getName());
-        double totalIncome = manager.getTotalByType(Transaction.TransactionType.INCOME);
-        double totalExpense = manager.getTotalByType(Transaction.TransactionType.EXPENSE);
-
-        System.out.println("Total Income:   " + totalIncome + " EGP");
-        System.out.println("Total Expenses: " + totalExpense + " EGP");
-        System.out.println("Net Balance:    " + (totalIncome - totalExpense) + " EGP");
+        System.out.println("Current Balance: " + myUser.getCurrentBalance() + " EGP");
+        double dailyLimit = manager.calculateSafeDailyLimit();
+        System.out.println("Safe Daily Limit: " + String.format("%.2f", dailyLimit) + " EGP");
+        System.out.println("Cycle End Date: " + myUser.getCycleEndDate());
     }
 
-    private static void showCategoryReport() {
-        System.out.println("\n--- EXPENSES BY CATEGORY ---");
-        Map<String, Double> report = manager.getExpensesByCategory();
-        if (report.isEmpty()) {
-            System.out.println("No expenses to group.");
-        } else {
-            report.forEach((cat, sum) -> System.out.println(cat + ": " + sum + " EGP"));
-        }
-    }
-
-    private static void showFullHistory() {
-        System.out.println("\n--- FULL HISTORY ---");
+    private static void showHistory() {
+        System.out.println("\n--- Full History ---");
         List<Transaction> history = manager.getHistory();
         if (history.isEmpty()) {
-            System.out.println("No data found.");
+            System.out.println("No transactions found.");
         } else {
-            history.forEach(t ->
-                    System.out.println("[" + t.getType() + "] " + t.getCategory() + " - " + t.getAmount() + " (" + t.getDescription() + ")")
-            );
+            for (Transaction t : history) {
+                System.out.println("[" + t.getFormattedDate() + "] " +
+                        t.getType() + ": " + t.getAmount() + " EGP | " +
+                        "Cat: " + t.getCategory() + " | " +
+                        "Desc: " + t.getDescription());
+            }
         }
     }
 

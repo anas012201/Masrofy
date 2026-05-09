@@ -1,56 +1,38 @@
 package model;
 
-import java.util.Calendar;
 import java.util.Date;
+import java.util.Calendar;
 
 public class User {
     private String name;
+    private float initialBudget;
     private float currentBalance;
-    private float totalAllowance;
-    private Date cycleStartDate;
     private Date cycleEndDate;
 
-    public User(String name, float initialBalance) {
+    public User(String name, float initialBudget) {
         this.name = name;
-        this.currentBalance = initialBalance;
-        this.totalAllowance = initialBalance;
-        this.cycleStartDate = new Date();
-
+        this.initialBudget = initialBudget;
+        this.currentBalance = initialBudget;
         Calendar cal = Calendar.getInstance();
-        cal.setTime(this.cycleStartDate);
-        cal.add(Calendar.DAY_OF_MONTH, 30);
+        cal.add(Calendar.MONTH, 1);
         this.cycleEndDate = cal.getTime();
     }
 
+    public void addIncome(float amount) {
+        this.currentBalance += amount;
+    }
+
+    public void spend(float amount) {
+        this.currentBalance -= amount;
+    }
+
     public void adjustBalance(float amount, Transaction.TransactionType type) {
-        if (type == Transaction.TransactionType.INCOME) {
-            this.currentBalance += amount;
-        } else {
-            this.currentBalance -= amount;
-        }
+        if (type == Transaction.TransactionType.INCOME) addIncome(amount);
+        else spend(amount);
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public float getCurrentBalance() {
-        return currentBalance;
-    }
-
-    public float getTotalAllowance() {
-        return totalAllowance;
-    }
-
-    public Date getCycleStartDate() {
-        return cycleStartDate;
-    }
-
-    public Date getCycleEndDate() {
-        return cycleEndDate;
-    }
-
-    public void setCycleEndDate(Date cycleEndDate) {
-        this.cycleEndDate = cycleEndDate;
-    }
+    public String getName() { return name; }
+    public float getCurrentBalance() { return currentBalance; }
+    public float getTotalAllowance() { return initialBudget; }
+    public Date getCycleEndDate() { return cycleEndDate; }
 }

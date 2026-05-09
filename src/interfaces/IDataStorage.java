@@ -6,4 +6,5 @@ import java.util.List;
 public interface IDataStorage {
     void saveTransaction(Transaction t);
     List<Transaction> loadTransactions();
+    void deleteTransaction(String date);
 }

@@ -6,5 +6,8 @@
     </CLASSES>
     <JAVADOC />
     <SOURCES />
+    <excluded>
+      <root url="file://$PROJECT_DIR$/../mysql-connector-j-9.7.0" />
+    </excluded>
   </library>
 </component>

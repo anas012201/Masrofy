@@ -1,31 +1,21 @@
 package model;
 
-import java.util.Date;
-import java.text.SimpleDateFormat;
-
 public class Transaction {
     public enum TransactionType { INCOME, EXPENSE }
-
-    private String description;
+    private String category;
     private double amount;
     private TransactionType type;
-    private String category;
-    private Date timestamp;
+    private String date;
 
-    public Transaction(String description, double amount, TransactionType type, String category) {
-        this.description = description;
+    public Transaction(String category, double amount, TransactionType type, String date) {
+        this.category = category;
         this.amount = amount;
         this.type = type;
-        this.category = category;
-        this.timestamp = new Date();
+        this.date = date;
     }
 
-    public String getFormattedDate() {
-        return new SimpleDateFormat("yyyy-MM-dd").format(timestamp);
-    }
-
-    public String getDescription() { return description; }
+    public String getCategory() { return category; }
     public double getAmount() { return amount; }
     public TransactionType getType() { return type; }
-    public String getCategory() { return category; }
+    public String getFormattedDate() { return date; }
 }

@@ -17,17 +17,35 @@ public class CycleManager {
         this.alertService = alertService;
     }
 
-    public void addTransaction(String d, double a, Transaction.TransactionType t, String c) {
-        Transaction newT = new Transaction(c, a, t, d);
-        storage.saveTransaction(newT);
-        user.adjustBalance((float)a, t);
+    public void addTransaction(String date, double amount, Transaction.TransactionType type, String category) {
+        Transaction t = new Transaction(category, amount, type, date);
+        storage.saveTransaction(t);
+        user.adjustBalance((float) amount, type);
+        
+        if (type == Transaction.TransactionType.EXPENSE) {
+            if (amount > calculateSafeDailyLimit()) {
+                alertService.sendCycleLimitAlert();
+            }
+        }
+        
+        if (user.getCurrentBalance() < 500) {
+            alertService.sendLowBalanceAlert(user.getCurrentBalance());
+        }
+    }
+
+    public double calculateSafeDailyLimit() {
+        double currentBalance = user.getCurrentBalance();
+        if (currentBalance <= 0) {
+            return 0.0;
+        }
+        return currentBalance / 30.0;
     }
 
     public List<Transaction> getHistory() {
         return storage.loadTransactions();
     }
 
-    public double calculateSafeDailyLimit() {
-        return user.getCurrentBalance() / 30.0;
+    public User getUser() {
+        return user;
     }
 }

@@ -67,11 +67,13 @@ public class Controller {
             @Override public void deleteTransaction(String date) {}
         };
 
-        manager = new CycleManager(user, storage, alertService);
         user = new User(uName, uBudget);
-        for (Transaction t : storage.loadTransactions()) {
+        List<Transaction> allData = storage.loadTransactions();
+        for (Transaction t : allData) {
             user.adjustBalance((float)t.getAmount(), t.getType());
         }
+
+        manager = new CycleManager(user, storage, alertService);
     }
 
     private String getCurrentDate() {
@@ -79,18 +81,8 @@ public class Controller {
     }
 
     public void addTransaction(String d, double a, Transaction.TransactionType t, String c) {
-        // لو التاريخ اللي جاي "Manual" أو فاضي، حط تاريخ اللحظة دي أوتوماتيك
         String finalDate = (d == null || d.isEmpty() || d.equalsIgnoreCase("Manual")) ? getCurrentDate() : d;
-        
         manager.addTransaction(finalDate, a, t, c);
-        user.adjustBalance((float)a, t);
-
-        if (t == Transaction.TransactionType.EXPENSE) {
-            double dailyLimit = manager.calculateSafeDailyLimit();
-            if (a > dailyLimit) {
-                JOptionPane.showMessageDialog(null, "Warning: This transaction exceeds your daily limit of " + String.format("%.2f", dailyLimit));
-            }
-        }
         initDatabaseLogic();
     }
 

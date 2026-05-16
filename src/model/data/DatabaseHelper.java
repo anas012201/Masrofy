@@ -14,11 +14,40 @@ import java.util.List;
  *
  * NOTE: No other class should talk to SQLite directly.
  * All database access must go through this class only.
+ *
+ * FIX: Added explicit JDBC driver registration in a static block.
+ *      Without this, the driver may silently fail to load in some
+ *      JVM environments, causing every DB call to return null/empty
+ *      and the app to randomly show the wrong startup screen.
  */
 public class DatabaseHelper {
 
     private static final String DB_NAME = "masroofy.db";
     private static final String DB_URL  = "jdbc:sqlite:" + DB_NAME;
+
+    // ======================================================
+    // FIX 1 — Driver Registration
+    // ======================================================
+
+    /**
+     * This static block runs once when DatabaseHelper is first loaded.
+     * It forces the SQLite JDBC driver to register itself with the
+     * DriverManager. Without this, the driver is not guaranteed to
+     * load, and every DriverManager.getConnection() call silently
+     * fails — making hasActiveCycle(), getPin(), etc. all return
+     * wrong values and causing the random startup screen bug.
+     */
+    static {
+        try {
+            Class.forName("org.sqlite.JDBC");
+        } catch (ClassNotFoundException e) {
+            System.out.println("FATAL: SQLite JDBC driver not found. " +
+                    "Make sure sqlite-jdbc.jar is on the classpath.");
+            // Re-throw as unchecked so the app fails fast and clearly
+            // instead of silently showing wrong screens.
+            throw new RuntimeException("SQLite JDBC driver missing", e);
+        }
+    }
 
     // ======================================================
     // Create Tables
@@ -77,16 +106,14 @@ public class DatabaseHelper {
 
     /**
      * Inserts a new budget cycle.
-     *
-     * FIX: getGeneratedKeys() throws "not implemented" on sqlite-jdbc 3.43.
-     *      We use "SELECT last_insert_rowid()" on the same open connection
-     *      instead — this is a plain SQLite SQL function that always works.
+     * Uses last_insert_rowid() instead of getGeneratedKeys() because
+     * getGeneratedKeys() throws "not implemented" on sqlite-jdbc 3.43.
      *
      * @return The new row's id, or -1 if the insert failed.
      */
     public int insertCycle(double allowance, String startDate, String endDate) {
         String sql = "INSERT INTO cycles (allowance, start_date, end_date, is_active) " +
-                     "VALUES (?, ?, ?, 1)";
+                "VALUES (?, ?, ?, 1)";
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -96,9 +123,8 @@ public class DatabaseHelper {
             pstmt.setString(3, endDate);
             pstmt.executeUpdate();
 
-            // Query the last inserted id on the same connection
             ResultSet rs = conn.createStatement()
-                               .executeQuery("SELECT last_insert_rowid()");
+                    .executeQuery("SELECT last_insert_rowid()");
             if (rs.next()) {
                 return rs.getInt(1);
             }
@@ -110,13 +136,9 @@ public class DatabaseHelper {
     }
 
     /**
-     * Returns the currently active cycle as a String array.
-     *
-     * FIX: The old version returned a raw ResultSet, which kept the
-     *      Connection alive. After resetCycle() deleted the row, the
-     *      stale open connection made hasActiveCycle() still return true.
-     *      Now we read everything, close the connection, and return a
-     *      plain String[] — no leak possible.
+     * Returns the currently active cycle as a plain String array.
+     * Reads all data and closes the connection before returning —
+     * no ResultSet leaks, no stale reads after resetCycle().
      *
      * @return String[] { id, allowance, start_date, end_date }
      *         or null if no active cycle exists.
@@ -162,6 +184,7 @@ public class DatabaseHelper {
 
     /**
      * Permanently deletes a cycle and all its transactions (full reset).
+     * Uses a transaction so both deletes succeed or both are rolled back.
      */
     public void deleteCycle(int cycleId) {
         String deleteTransactions = "DELETE FROM transactions WHERE cycle_id = ?";
@@ -200,15 +223,13 @@ public class DatabaseHelper {
 
     /**
      * Inserts a new expense transaction.
-     *
-     * FIX: Same as insertCycle — uses last_insert_rowid() instead of
-     *      the unsupported getGeneratedKeys().
+     * Uses last_insert_rowid() — same reason as insertCycle().
      *
      * @return The new row's id, or -1 if the insert failed.
      */
     public int insertTransaction(int cycleId, double amount, String category, String timestamp) {
         String sql = "INSERT INTO transactions (cycle_id, amount, category, timestamp) " +
-                     "VALUES (?, ?, ?, ?)";
+                "VALUES (?, ?, ?, ?)";
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -219,9 +240,8 @@ public class DatabaseHelper {
             pstmt.setString(4, timestamp);
             pstmt.executeUpdate();
 
-            // Query the last inserted id on the same connection
             ResultSet rs = conn.createStatement()
-                               .executeQuery("SELECT last_insert_rowid()");
+                    .executeQuery("SELECT last_insert_rowid()");
             if (rs.next()) {
                 return rs.getInt(1);
             }
@@ -234,9 +254,8 @@ public class DatabaseHelper {
 
     /**
      * Retrieves all transactions for a given cycle, newest first.
-     *
-     * FIX: Returns List<String[]> instead of a raw ResultSet so the
-     *      connection is fully closed before the caller sees any data.
+     * Returns List<String[]> so the connection is fully closed before
+     * the caller sees any data — no ResultSet leaks.
      */
     public List<String[]> getAllTransactions(int cycleId) {
         List<String[]> list = new ArrayList<>();
@@ -265,9 +284,6 @@ public class DatabaseHelper {
 
     /**
      * Retrieves transactions filtered by category.
-     *
-     * FIX: Returns List<String[]> instead of a raw ResultSet so the
-     *      connection is fully closed before the caller sees any data.
      */
     public List<String[]> getTransactionsByCategory(int cycleId, String category) {
         List<String[]> list = new ArrayList<>();
@@ -375,20 +391,19 @@ public class DatabaseHelper {
 
     public String getPin() {
         String sql = "SELECT pin FROM settings WHERE id = 1";
-        String pin = null;
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             ResultSet rs = pstmt.executeQuery();
             if (rs.next() && rs.getObject(1) != null) {
-                pin = rs.getString(1);
+                return rs.getString(1);
             }
 
         } catch (SQLException e) {
             System.out.println("Error fetching PIN: " + e.getMessage());
         }
-        return pin;
+        return null;
     }
 
     public void setPrivacyLock(boolean isEnabled) {
@@ -407,19 +422,18 @@ public class DatabaseHelper {
 
     public boolean isPrivacyLockEnabled() {
         String sql = "SELECT privacy_lock FROM settings WHERE id = 1";
-        boolean isEnabled = false;
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                isEnabled = rs.getInt(1) == 1;
+                return rs.getInt(1) == 1;
             }
 
         } catch (SQLException e) {
             System.out.println("Error fetching privacy lock: " + e.getMessage());
         }
-        return isEnabled;
+        return false;
     }
 }

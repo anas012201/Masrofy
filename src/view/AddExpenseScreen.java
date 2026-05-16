@@ -1,151 +1,172 @@
 package view;
 
+import Controller.AppController;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
-public class AddExpenseScreen {
+/**
+ * AddExpenseScreen.java
+ * User enters an amount and picks a category.
+ * Saves via AppController.
+ */
+public class AddExpenseScreen extends JFrame {
 
-    private static final Color DARK_BG = new Color(15, 15, 25);
+    private static final Color DARK_BG    = new Color(15, 15, 25);
     private static final Color NEON_GREEN = new Color(57, 255, 20);
-    private static final Color FIELD_BG = new Color(30, 30, 45);
-    private static final Color SELECTION_COLOR = new Color(70, 70, 90);
-    
-    private static JButton selectedButton = null; // Track current selection
+    private static final Color FIELD_BG   = new Color(30, 30, 45);
 
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> createAndShowGUI());
+    private AppController ctrl;
+    private JButton       selectedCategoryBtn = null;
+    private JTextField    amountField;
+
+    public AddExpenseScreen(AppController ctrl) {
+        this.ctrl = ctrl;
+        buildUI();
     }
 
-    private static void createAndShowGUI() {
-        JFrame frame = new JFrame("Spend wise - Expense Management");
-        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        frame.setSize(450, 800);
-        frame.setResizable(false);
-        frame.setLocationRelativeTo(null);
+    private void buildUI() {
+        setTitle("Masroofy - Add Expense");
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setSize(450, 700);
+        setResizable(false);
+        setLocationRelativeTo(null);
 
-        JPanel mainPanel = new JPanel(null);
-        mainPanel.setBackground(DARK_BG);
-        frame.setContentPane(mainPanel);
+        JPanel panel = new JPanel(null);
+        panel.setBackground(DARK_BG);
+        setContentPane(panel);
 
-        // --- 1. Title ---
-        JLabel header = new JLabel("Expense Entry");
-        header.setFont(new Font("Monospaced", Font.BOLD, 22));
+        // Header
+        JLabel header = new JLabel("Add Expense");
+        header.setFont(new Font("Segoe UI", Font.BOLD, 24));
         header.setForeground(Color.WHITE);
-        header.setBounds(20, 20, 200, 30);
-        mainPanel.add(header);
+        header.setBounds(20, 25, 250, 35);
+        panel.add(header);
 
-        // --- 2. Amount Field ---
-        JLabel label1 = new JLabel("AMOUNT (EGP)");
-        label1.setFont(new Font("SansSerif", Font.BOLD, 12));
-        label1.setForeground(NEON_GREEN);
-        label1.setBounds(20, 70, 200, 20);
-        mainPanel.add(label1);
+        // Amount label
+        JLabel lbl1 = new JLabel("AMOUNT (EGP)");
+        lbl1.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lbl1.setForeground(NEON_GREEN);
+        lbl1.setBounds(20, 80, 200, 20);
+        panel.add(lbl1);
 
-        JTextField amountField = new JTextField();
+        // Amount field
+        amountField = new JTextField();
         amountField.setBackground(FIELD_BG);
         amountField.setForeground(Color.WHITE);
-        amountField.setFont(new Font("Consolas", Font.BOLD, 26));
+        amountField.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        amountField.setCaretColor(NEON_GREEN);
         amountField.setBorder(BorderFactory.createLineBorder(new Color(50, 50, 70)));
-        amountField.setBounds(20, 95, 395, 55);
-        mainPanel.add(amountField);
+        amountField.setBounds(20, 105, 395, 60);
+        panel.add(amountField);
 
-        // --- 3. Categories with Toggle Logic (Select/Unselect) ---
-        JLabel label2 = new JLabel("CHOOSE CATEGORY");
-        label2.setFont(new Font("SansSerif", Font.BOLD, 12));
-        label2.setForeground(NEON_GREEN);
-        label2.setBounds(20, 170, 200, 20);
-        mainPanel.add(label2);
+        // Category label
+        JLabel lbl2 = new JLabel("SELECT CATEGORY");
+        lbl2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lbl2.setForeground(NEON_GREEN);
+        lbl2.setBounds(20, 190, 200, 20);
+        panel.add(lbl2);
 
-        JPanel grid = new JPanel(new GridLayout(0, 3, 8, 8));
+        // Category grid
+        JPanel grid = new JPanel(new GridLayout(2, 3, 8, 8));
         grid.setBackground(DARK_BG);
-        grid.setBounds(20, 200, 395, 120);
+        grid.setBounds(20, 215, 395, 110);
 
         String[] categories = {"Food", "Transport", "Shopping", "Bills", "Health", "Other"};
         for (String cat : categories) {
-            grid.add(createToggleButton(cat));
+            grid.add(makeCategoryBtn(cat));
         }
-        mainPanel.add(grid);
+        panel.add(grid);
 
-        // --- 4. Category Management ---
-        /**
-         * BACK-END NOTE: 
-         * Edit Button Logic: 
-         * 1. Get selectedButton.getText().
-         * 2. Open a dialog to rename the category in the SQLite database.
-         * 3. Update all past expenses linked to this category name.
-         */
-        JButton editCatBtn = new JButton("EDIT CATEGORY");
-        styleSecondaryBtn(editCatBtn, Color.ORANGE);
-        editCatBtn.setBounds(20, 335, 190, 40);
-        mainPanel.add(editCatBtn);
+        // Error label
+        JLabel errorLabel = new JLabel("");
+        errorLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        errorLabel.setForeground(Color.RED);
+        errorLabel.setBounds(20, 340, 395, 20);
+        panel.add(errorLabel);
 
-        JButton manageBtn = new JButton("MANAGE ALL");
-        styleSecondaryBtn(manageBtn, Color.CYAN);
-        manageBtn.setBounds(225, 335, 190, 40);
-        mainPanel.add(manageBtn);
-
-        // --- 5. Action Buttons ---
-        /**
-         * BACK-END NOTE:
-         * SAVE Action:
-         * - Check if an amount exists and a category is selected (selectedButton != null).
-         * - INSERT INTO expenses (amount, category, timestamp).
-         * - Refresh Dashboard data.
-         */
-        JButton saveBtn = new JButton("SAVE TRANSACTION");
-        saveBtn.setFont(new Font("SansSerif", Font.BOLD, 16));
+        // Save button
+        JButton saveBtn = new JButton("SAVE EXPENSE");
+        saveBtn.setFont(new Font("Segoe UI", Font.BOLD, 16));
         saveBtn.setBackground(NEON_GREEN);
-        saveBtn.setForeground(Color.BLACK);
-        saveBtn.setBounds(20, 580, 395, 60);
-        mainPanel.add(saveBtn);
+        saveBtn.setForeground(DARK_BG);
+        saveBtn.setFocusPainted(false);
+        saveBtn.setBorderPainted(false);
+        saveBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        saveBtn.setBounds(20, 390, 395, 60);
+        panel.add(saveBtn);
 
-        frame.setVisible(true);
+        saveBtn.addActionListener(e -> {
+            errorLabel.setText("");
+
+            // Validate amount
+            double amount;
+            try {
+                amount = Double.parseDouble(amountField.getText().trim());
+                if (amount <= 0) throw new NumberFormatException();
+            } catch (NumberFormatException ex) {
+                errorLabel.setText("Please enter a valid positive amount.");
+                return;
+            }
+
+            // Validate category
+            if (selectedCategoryBtn == null) {
+                errorLabel.setText("Please select a category.");
+                return;
+            }
+
+            String category = selectedCategoryBtn.getText();
+            boolean ok = ctrl.addExpense(amount, category);
+
+            if (ok) {
+                ctrl.navigateTo("DASHBOARD");
+            } else {
+                errorLabel.setText("Failed to save. Please try again.");
+            }
+        });
+
+        // Back button
+        JButton backBtn = new JButton("← BACK");
+        backBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        backBtn.setForeground(Color.WHITE);
+        backBtn.setBackground(new Color(30, 30, 45));
+        backBtn.setFocusPainted(false);
+        backBtn.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 80)));
+        backBtn.setBounds(20, 470, 395, 50);
+        backBtn.addActionListener(e -> ctrl.navigateTo("DASHBOARD"));
+        panel.add(backBtn);
     }
 
-    private static JButton createToggleButton(String text) {
+    private JButton makeCategoryBtn(String text) {
         JButton btn = new JButton(text);
         btn.setBackground(FIELD_BG);
         btn.setForeground(Color.WHITE);
         btn.setFocusPainted(false);
         btn.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 80)));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         btn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                if (selectedButton == btn) {
-                    // SECOND CLICK: Unselect
-                    unselect(btn);
-                    selectedButton = null;
+                if (selectedCategoryBtn == btn) {
+                    // Deselect
+                    btn.setBackground(FIELD_BG);
+                    btn.setForeground(Color.WHITE);
+                    selectedCategoryBtn = null;
                 } else {
-                    // FIRST CLICK: Select (and unselect previous)
-                    if (selectedButton != null) unselect(selectedButton);
-                    select(btn);
-                    selectedButton = btn;
+                    // Deselect previous
+                    if (selectedCategoryBtn != null) {
+                        selectedCategoryBtn.setBackground(FIELD_BG);
+                        selectedCategoryBtn.setForeground(Color.WHITE);
+                    }
+                    // Select this one
+                    btn.setBackground(NEON_GREEN);
+                    btn.setForeground(new Color(15, 15, 25));
+                    selectedCategoryBtn = btn;
                 }
             }
         });
         return btn;
-    }
-
-    private static void select(JButton btn) {
-        btn.setBackground(NEON_GREEN);
-        btn.setForeground(Color.BLACK);
-        btn.setBorder(BorderFactory.createLineBorder(Color.WHITE, 2));
-    }
-
-    private static void unselect(JButton btn) {
-        btn.setBackground(FIELD_BG);
-        btn.setForeground(Color.WHITE);
-        btn.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 80)));
-    }
-
-    private static void styleSecondaryBtn(JButton btn, Color accent) {
-        btn.setFont(new Font("SansSerif", Font.BOLD, 11));
-        btn.setForeground(accent);
-        btn.setBackground(DARK_BG);
-        btn.setBorder(BorderFactory.createLineBorder(accent, 1));
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
     }
 }

@@ -1,5 +1,7 @@
 package model.data;
 
+import interfaces.IDataStorage;
+
 import java.util.List;
 
 /**
@@ -21,7 +23,7 @@ import java.util.List;
  *        ↓
  *   masroofy.db
  */
-public class SQLiteStorage {
+public class SQLiteStorage implements IDataStorage {
 
     private DatabaseHelper db;
 
